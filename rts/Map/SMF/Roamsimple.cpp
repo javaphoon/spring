@@ -480,8 +480,6 @@ void Landscape::Tessellate(float cx,float cy, float cz,int viewradius)
 	// Perform Tessellation
 	int nCount;
 	Patch *patch = &(m_Patches[0]);
-
-
 	for (nCount=0; nCount < (w/PATCH_SIZE)*(h/PATCH_SIZE); nCount++, patch++ )
 	{
 
@@ -498,19 +496,25 @@ void Landscape::Render(CBFGroundDrawer * parent)
 {
 	int nCount;
 	Patch *patch = &(m_Patches[0]);
-
-	// Scale the terrain by the terrain scale specified at compile time.
-
-
 	for (nCount=0; nCount < (w/PATCH_SIZE)*(h/PATCH_SIZE); nCount++, patch++ )
 	{
-
-
 		if (patch->isVisibile()){
 			CVertexArray *ma = GetVertexArray();
 			ma->Initialize();
 			ma->EnlargeArrays(100010,100010);
+
+			//parent->DrawVertexAQ(ma,patch->m_WorldX,patch->m_WorldY);
+
+			//parent->DrawVertexAQ(ma,patch->m_WorldX,patch->m_WorldY+PATCH_SIZE);
+
+			//parent->DrawVertexAQ(ma,patch->m_WorldX+PATCH_SIZE,patch->m_WorldY);
+
+
+			//parent->DrawVertexAQ(ma,patch->m_WorldX+PATCH_SIZE,patch->m_WorldY+PATCH_SIZE);
 			patch->Render(ma,parent,nCount);
+
+			//parent->EndStripQ(ma);
+
 			parent->SetupBigSquare(nCount%(w/PATCH_SIZE),nCount/(w/PATCH_SIZE));
 			parent->DrawGroundVertexArrayQ(ma);
 		}

@@ -14,7 +14,6 @@
 //#include <gl/glu.h>		// GLU library
 
 #include "Utility.h"
-//#include "Landscape.h"
 
 // Observer and Follower modes
 #define FOLLOW_MODE (0)

@@ -13,7 +13,7 @@
 //#include <gl/gl.h>		// OpenGL
 //#include <gl/glu.h>		// GLU library
 
-#include "utility.h"
+#include "Utility.h"
 //#include "landscape.h"
 
 // Observer and Follower modes

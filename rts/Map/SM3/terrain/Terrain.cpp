@@ -187,7 +187,7 @@ namespace terrain {
 		int vertexSize = GetVertexSize();
 
 		// Bind the vertex buffer components
-		Vector3 *vbuf = (Vector3 *)renderData->vertexBuffer.Bind();
+		Vector3* vbuf = (Vector3*) renderData->vertexBuffer.Bind();
 		glEnableClientState (GL_VERTEX_ARRAY);
 		glVertexPointer (3, GL_FLOAT, vertexSize, vbuf ++);
 		if (vda & VRT_Normal)
@@ -636,21 +636,18 @@ namespace terrain {
 		}
 		else  // no texture caching, so use the texturing system directly
 		{
-			int numPasses=texturing->NumPasses();
+			const int numPasses = texturing->NumPasses();
 
 			glEnable(GL_DEPTH_TEST);
 
 			texturing->BeginTexturing();
 
-			numPasses=1;
-			for (int pass=0;pass<numPasses;pass++)
-			{
-				bool skipNodes=false;
+			for (int pass = 0; pass < numPasses; pass++) {
+				bool skipNodes = false;
 
 				texturing->BeginPass(pass);
 
-				for (size_t a=0;a<activeRC->quads.size();a++)
-				{
+				for (size_t a = 0; a < activeRC->quads.size(); a++) {
 					TQuad *q = activeRC->quads[a].quad;
 
 					// Setup node texturing
@@ -660,17 +657,17 @@ namespace terrain {
 
 					if (!skipNodes) {
 						// Draw the node
-						q->Draw (indexTable, false, activeRC->quads[a].lodState);
+						q->Draw(indexTable, false, activeRC->quads[a].lodState);
 					}
 				}
 
 				texturing->EndPass();
 			}
 
-			glDisable (GL_BLEND);
-			glDepthMask (GL_TRUE);
+			glDisable(GL_BLEND);
+			glDepthMask(GL_TRUE);
 
-			texturing->EndTexturing ();
+			texturing->EndTexturing();
 		}
 
 		if (debugQuad)
@@ -1104,6 +1101,9 @@ namespace terrain {
 
 		// update heightmap mipmap chain
 		heightmap->UpdateLower(sx,sy,w,h);
+
+		Update();
+		CacheTextures();
 	}
 
 	void Terrain::GetHeightmap (int sx,int sy,int w,int h, float *dest)

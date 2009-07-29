@@ -5,6 +5,7 @@
 #include "mmgr.h"
 
 #include "Game/PlayerBase.h"
+#include "Sim/Misc/Team.h"
 #include "Net/RawPacket.h"
 #include "Rendering/InMapDraw.h"
 #include "Net/PackPacket.h"
@@ -196,7 +197,8 @@ PacketType CBaseNetProtocol::SendGameOver()
 	return PacketType(new PackPacket(1, NETMSG_GAMEOVER));
 }
 
-// NETMSG_MAPDRAW = 31, uchar messageSize =  8, myPlayerNum, command = CInMapDraw::NET_ERASE; short x, z;
+
+// [NETMSG_MAPDRAW = 31] uchar messageSize = 9, myPlayerNum, command = CInMapDraw::NET_ERASE; short x, z; bool
 PacketType CBaseNetProtocol::SendMapErase(uchar myPlayerNum, short x, short z)
 {
 	PackPacket* packet = new PackPacket(8, NETMSG_MAPDRAW);
@@ -204,22 +206,36 @@ PacketType CBaseNetProtocol::SendMapErase(uchar myPlayerNum, short x, short z)
 	return PacketType(packet);
 }
 
-// NETMSG_MAPDRAW = 31, uchar messageSize = 12, myPlayerNum, command = CInMapDraw::NET_LINE; short x1, z1, x2, z2;
-PacketType CBaseNetProtocol::SendMapDrawLine(uchar myPlayerNum, short x1, short z1, short x2, short z2)
+// [NETMSG_MAPDRAW = 31] uchar messageSize, uchar myPlayerNum, command = CInMapDraw::NET_POINT; short x, z; bool; std::string label;
+PacketType CBaseNetProtocol::SendMapDrawPoint(uchar myPlayerNum, short x, short z, const std::string& label, bool fromLua)
 {
-	PackPacket* packet = new PackPacket(12, NETMSG_MAPDRAW);
-	*packet << static_cast<uchar>(12) << myPlayerNum << static_cast<uchar>(CInMapDraw::NET_LINE) << x1 << z1 << x2 << z2;
+	const unsigned size = 9 + label.size() + 1;
+	PackPacket* packet = new PackPacket(size, NETMSG_MAPDRAW);
+	*packet <<
+		static_cast<uchar>(size) <<
+		myPlayerNum <<
+		static_cast<uchar>(CInMapDraw::NET_POINT) <<
+		x <<
+		z <<
+		uchar(fromLua) <<
+		label;
 	return PacketType(packet);
 }
 
-// NETMSG_MAPDRAW = 31, uchar messageSize, uchar myPlayerNum, command = CInMapDraw::NET_POINT; short x, z; std::string label;
-PacketType CBaseNetProtocol::SendMapDrawPoint(uchar myPlayerNum, short x, short z, const std::string& label)
+// [NETMSG_MAPDRAW = 31] uchar messageSize = 13, myPlayerNum, command = CInMapDraw::NET_LINE; short x1, z1, x2, z2; bool
+PacketType CBaseNetProtocol::SendMapDrawLine(uchar myPlayerNum, short x1, short z1, short x2, short z2, bool fromLua)
 {
-	unsigned size = 8 + label.size() + 1;
-	PackPacket* packet = new PackPacket(size, NETMSG_MAPDRAW);
-	*packet << static_cast<uchar>(size) << myPlayerNum << static_cast<uchar>(CInMapDraw::NET_POINT) << x << z << label;
+	PackPacket* packet = new PackPacket(13, NETMSG_MAPDRAW);
+	*packet <<
+		static_cast<uchar>(13) <<
+		myPlayerNum <<
+		static_cast<uchar>(CInMapDraw::NET_LINE) <<
+		x1 << z1 <<
+		x2 << z2 <<
+		uchar(fromLua);
 	return PacketType(packet);
 }
+
 
 PacketType CBaseNetProtocol::SendSyncResponse(int frameNum, uint checksum)
 {
@@ -392,6 +408,7 @@ CBaseNetProtocol::CBaseNetProtocol()
 	proto->AddType(NETMSG_GAMEDATA, -2);
 	proto->AddType(NETMSG_ALLIANCE, 4);
 	proto->AddType(NETMSG_CCOMMAND, -2);
+	proto->AddType(NETMSG_TEAMSTAT, 2 + sizeof(CTeam::Statistics));
 	
 #ifdef SYNCDEBUG
 	proto->AddType(NETMSG_SD_CHKREQUEST, 5);

@@ -1,17 +1,11 @@
 #include "StdAfx.h"
 #include "unitsync.h"
+#include "unitsync_api.h"
 
 #include <algorithm>
 #include <string>
 #include <vector>
 #include <set>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <shlobj.h>
-#include <direct.h>
-#include <io.h>
-#endif
 
 // shared with spring:
 #include "LuaInclude.h"
@@ -270,35 +264,7 @@ EXPORT(int) Init(bool isServer, int id)
 	try {
 		if (!logOutputInitialised)
 		{
-			// set default
 			logOutput.SetFilename("unitsync.log");
-#if defined(_WIN32)
-			// on windows, try to put the log in a writable dir
-			if (!FileSystemHandler::DirIsWritable(".")) {
-				char szPath[MAX_PATH];
-				if(SUCCEEDED(SHGetFolderPath(NULL,
-						CSIDL_PERSONAL|CSIDL_FLAG_CREATE,
-						NULL,
-						0,
-						szPath))) {
-					// use My Documents\My Games\Spring to not clutter
-					// the user's my docs dir
-					// can't use filesystem.CreateDirectory() because it
-					// uses logOutput
-					string mygames = string(szPath) + "\\My Games";
-					string newdir = string(szPath) + "\\My Games\\Spring";
-					if (_access(mygames.c_str(), 0) != 0)
-						_mkdir(mygames.c_str());
-					if (_access(newdir.c_str(), 0) != 0)
-						_mkdir(newdir.c_str());
-					// make sure we can log stuff
-					if (_access(newdir.c_str(), 0) == 0) {
-						string newfilename = newdir + "\\unitsync.log";
-						logOutput.SetFilename(newfilename.c_str());
-					}
-				}
-			}
-#endif
 			logOutput.Initialize();
 			logOutputInitialised = true;
 		}
@@ -458,6 +424,8 @@ EXPORT(const char*) GetFullUnitName(int unit)
  *
  * After this, the contents of the archive are available to other unitsync functions,
  * for example: ProcessUnits(), OpenFileVFS(), ReadFileVFS(), FileSizeVFS(), etc.
+ *
+ * Don't forget to call RemoveAllArchives() before proceeding with other archives.
  */
 EXPORT(void) AddArchive(const char* name)
 {
@@ -733,6 +701,27 @@ static int _GetMapInfoEx(const char* name, MapInfo* outInfo, int version)
  * @return Zero on error; non-zero on success
  *
  * If version >= 1, then the author field is filled.
+ *
+ * Important: the description and author fields must point to a valid, and sufficiently long buffer
+ * to store their contents.  Description is max 255 chars, and author is max 200 chars. (including
+ * terminating zero byte).
+ *
+ * If an error occurs (return value 0), the description is set to an error message.
+ * However, using GetNextError() is the recommended way to get the error message.
+ *
+ * Example:
+ *		@code
+ *		char description[255];
+ *		char author[200];
+ *		MapInfo mi;
+ *		mi.description = description;
+ *		mi.author = author;
+ *		if (GetMapInfoEx("somemap.smf", &mi, 1)) {
+ *			//now mi is contains map data
+ *		} else {
+ *			//handle the error
+ *		}
+ *		@endcode
  */
 EXPORT(int) GetMapInfoEx(const char* name, MapInfo* outInfo, int version)
 {
@@ -759,6 +748,71 @@ EXPORT(int) GetMapInfo(const char* name, MapInfo* outInfo)
 	UNITSYNC_CATCH_BLOCKS;
 	return 0;
 }
+
+
+
+/**
+ * @brief return the map's minimum height
+ * @param name name of the map, e.g. "SmallDivide.smf"
+ *
+ * Together with maxHeight, this determines the
+ * range of the map's height values in-game. The
+ * conversion formula for any raw 16-bit height
+ * datum <code>h</code> is
+ *
+ *    <code>minHeight + (h * (maxHeight - minHeight) / 65536.0f)</code>
+ */
+EXPORT(float) GetMapMinHeight(const char* name) {
+	try {
+		ScopedMapLoader loader(name);
+		CSmfMapFile file(name);
+		MapParser parser(name);
+
+		const SMFHeader& header = file.GetHeader();
+		const LuaTable rootTable = parser.GetRoot();
+		const LuaTable smfTable = rootTable.SubTable("smf");
+
+		if (smfTable.KeyExists("minHeight")) {
+			// override the header's minHeight value
+			return (smfTable.GetFloat("minHeight", 0.0f));
+		} else {
+			return (header.minHeight);
+		}
+	}
+	UNITSYNC_CATCH_BLOCKS;
+	return 0.0f;
+}
+
+/**
+ * @brief return the map's maximum height
+ * @param name name of the map, e.g. "SmallDivide.smf"
+ *
+ * Together with minHeight, this determines the
+ * range of the map's height values in-game. See
+ * GetMapMinHeight() for the conversion formula.
+ */
+EXPORT(float) GetMapMaxHeight(const char* name) {
+	try {
+		ScopedMapLoader loader(name);
+		CSmfMapFile file(name);
+		MapParser parser(name);
+
+		const SMFHeader& header = file.GetHeader();
+		const LuaTable rootTable = parser.GetRoot();
+		const LuaTable smfTable = rootTable.SubTable("smf");
+
+		if (smfTable.KeyExists("maxHeight")) {
+			// override the header's maxHeight value
+			return (smfTable.GetFloat("maxHeight", 0.0f));
+		} else {
+			return (header.maxHeight);
+		}
+	}
+	UNITSYNC_CATCH_BLOCKS;
+	return 0.0f;
+}
+
+
 
 
 static vector<string> mapArchives;
@@ -1352,7 +1406,7 @@ EXPORT(int) GetPrimaryModArchiveCount(int index)
 
 /**
  * @brief Retrieves the name of the current mod's archive.
- * @param arnr The archive's index/id.
+ * @param archiveNr The archive's index/id.
  * @return NULL on error; the name of the archive on success
  * @see GetPrimaryModArchiveCount
  */
@@ -1598,7 +1652,31 @@ EXPORT(int) GetModOptionCount()
 	return 0;
 }
 
+EXPORT(int) GetCustomOptionCount(const char* filename)
+{
+	try {
+		CheckInit();
 
+		options.clear();
+		optionsSet.clear();
+
+		try {
+			ParseOptions(filename, SPRING_VFS_ZIP, SPRING_VFS_ZIP);
+		}
+		UNITSYNC_CATCH_BLOCKS;
+
+		optionsSet.clear();
+
+		return options.size();
+	}
+	UNITSYNC_CATCH_BLOCKS;
+
+	// Failed to load custom options file
+	options.clear();
+	optionsSet.clear();
+
+	return 0;
+}
 
 //////////////////////////
 //////////////////////////
@@ -1690,51 +1768,6 @@ static int GetNumberOfLuaAIs()
 	}
 	UNITSYNC_CATCH_BLOCKS;
 	return 0;
-}
-/**
- * DEPRECATED: LUA AIs are now handled the same way as Skirmish AIs.
- */
-EXPORT(int) GetLuaAICount()
-{
-	return 0;
-}
-
-
-/**
- * @brief Retrieve the name of a LUA AI
- * @return NULL on error; the name of the LUA AI on success
- *
- * Be sure you've made a call to GetLuaAICount() prior to using this.
- *
- * DEPRECATED: LUA AIs are handled the same way as Skirmish AIs.
- */
-EXPORT(const char*) GetLuaAIName(int aiIndex)
-{
-	try {
-		static const char* DEPSTRING = "DEPRECATED_FUNCTION_CALLED";
-		return DEPSTRING;
-	}
-	UNITSYNC_CATCH_BLOCKS;
-	return NULL;
-}
-
-
-/**
- * @brief Retrieve the description of a LUA AI
- * @return NULL on error; the description of the LUA AI on success
- *
- * Be sure you've made a call to GetLuaAICount() prior to using this.
- *
- * DEPRECATED: LUA AIs are handled the same way as Skirmish AIs.
- */
-EXPORT(const char*) GetLuaAIDesc(int aiIndex)
-{
-	try {
-		static const char* DEPSTRING = "DEPRECATED_FUNCTION_CALLED";
-		return DEPSTRING;
-	}
-	UNITSYNC_CATCH_BLOCKS;
-	return NULL;
 }
 
 
@@ -2882,7 +2915,7 @@ static void CheckConfigHandler()
 /**
  * @brief get string from Spring configuration
  * @param name name of key to get
- * @param defvalue default string value to use if key is not found, may not be NULL
+ * @param defValue default string value to use if key is not found, may not be NULL
  * @return string value
  */
 EXPORT(const char*) GetSpringConfigString(const char* name, const char* defValue)
@@ -2899,7 +2932,7 @@ EXPORT(const char*) GetSpringConfigString(const char* name, const char* defValue
 /**
  * @brief get integer from Spring configuration
  * @param name name of key to get
- * @param defvalue default integer value to use if key is not found
+ * @param defValue default integer value to use if key is not found
  * @return integer value
  */
 EXPORT(int) GetSpringConfigInt(const char* name, const int defValue)
@@ -2915,7 +2948,7 @@ EXPORT(int) GetSpringConfigInt(const char* name, const int defValue)
 /**
  * @brief get float from Spring configuration
  * @param name name of key to get
- * @param defvalue default float value to use if key is not found
+ * @param defValue default float value to use if key is not found
  * @return float value
  */
 EXPORT(float) GetSpringConfigFloat(const char* name, const float defValue)
@@ -2999,50 +3032,3 @@ class CMessageOnce
 	static CMessageOnce msg; \
 	msg(string(__FUNCTION__) + ": deprecated unitsync function called, please update your lobby client"); \
 	SetLastError("deprecated unitsync function called")
-
-
-// deprecated 2008/10
-EXPORT(const char*) GetCurrentList()
-{
-	DEPRECATED;
-	return NULL;
-}
-
-// deprecated 2008/10
-EXPORT(void) AddClient(int id, const char *unitList)
-{
-	DEPRECATED;
-}
-
-// deprecated 2008/10
-EXPORT(void) RemoveClient(int id)
-{
-	DEPRECATED;
-}
-
-// deprecated 2008/10
-EXPORT(const char*) GetClientDiff(int id)
-{
-	DEPRECATED;
-	return NULL;
-}
-
-// deprecated 2008/10
-EXPORT(void) InstallClientDiff(const char *diff)
-{
-	DEPRECATED;
-}
-
-// deprecated 2008/10
-EXPORT(int) IsUnitDisabled(int unit)
-{
-	DEPRECATED;
-	return 0;
-}
-
-// deprecated 2008/10
-EXPORT(int) IsUnitDisabledByClient(int unit, int clientId)
-{
-	DEPRECATED;
-	return 0;
-}

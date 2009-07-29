@@ -4,6 +4,8 @@
 // SJ's SunParser class by Tobi. Slightly modified by AF for AI usage.
 // Uses the GPL V2 licence
 
+#include <limits.h>
+
 #include <boost/spirit.hpp>
 #include <boost/spirit/error_handling.hpp>
 #include <boost/scoped_array.hpp>
@@ -154,7 +156,7 @@ namespace ntai {
 		if(!message.empty())
 		G->L.eprint(message + " in " +filename);
 		//throw parse_error( , error_it.get_currentline(), error_it.get_position().line, error_it.get_position().column, filename );
-		
+
 		if(!info.full){
 			boost::spirit::position_iterator2<char const*> error_it( buf, buf + size, filename );
 			for( size_t i = 0; i != size; ++i,++error_it );

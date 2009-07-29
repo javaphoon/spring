@@ -3,17 +3,13 @@
 #include "LogOutput.h"
 
 #include <assert.h>
+#include <iostream>
 #include <fstream>
 #include <string.h>
 #include <boost/thread/recursive_mutex.hpp>
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <windows.h>
-#include <shlobj.h>
-#include <direct.h>
-#include <io.h>
-// for creating infolog in my documents if cwd isn't writeable
-#include "FileSystem/FileSystem.h"
 #endif
 
 #include "lib/gml/gml.h"
@@ -24,6 +20,8 @@
 #include "ConfigHandler.h"
 #include "mmgr.h"
 
+#include <string>
+#include <vector>
 
 using std::string;
 using std::vector;
@@ -67,7 +65,7 @@ static vector<PreInitLogEntry>& preInitLog()
 }
 
 static vector<ILogSubscriber*> subscribers;
-static char filename[MAX_PATH] = "infolog.txt";
+static const char* filename = "infolog.txt";
 static std::ofstream* filelog = 0;
 static bool initialized = false;
 static boost::recursive_mutex tempstrMutex;
@@ -117,8 +115,7 @@ void CLogOutput::SetFilename(const char* fname)
 	GML_STDMUTEX_LOCK(log); // SetFilename
 
 	assert(!initialized);
-
-	strncpy(filename, fname, MAX_PATH-1);
+	filename = fname;
 }
 
 
@@ -131,37 +128,7 @@ void CLogOutput::SetFilename(const char* fname)
  */
 void CLogOutput::Initialize()
 {
-	if (initialized)
-		return;
-
-#if defined(_WIN32) && !defined(UNITSYNC)
-	// on windows, try to put the infolog in a writable dir
-	// unitsync should do this by itself
-	if (!FileSystemHandler::DirIsWritable(".")) {
-		char szPath[MAX_PATH];
-		if(SUCCEEDED(SHGetFolderPath(NULL,
-				CSIDL_PERSONAL|CSIDL_FLAG_CREATE,
-				NULL,
-				0,
-				szPath))) {
-			// use My Documents\My Games\Spring to not clutter
-			// the user's my docs dir
-			// can't use filesystem.CreateDirectory() because it
-			// uses logOutput
-			string mygames = string(szPath) + "\\My Games";
-			string newdir = string(szPath) + "\\My Games\\Spring";
-			if (_access(mygames.c_str(), 0) != 0)
-				_mkdir(mygames.c_str());
-			if (_access(newdir.c_str(), 0) != 0)
-				_mkdir(newdir.c_str());
-			// make sure we can log stuff
-			if (_access(newdir.c_str(), 0) == 0) {
-				string newfilename = newdir + "\\" + string(filename);
-				SetFilename(newfilename.c_str());
-			}
-		}
-	}
-#endif
+	if (initialized) return;
 
 	filelog = new std::ofstream(filename);
 	if (filelog->bad())
@@ -174,7 +141,15 @@ void CLogOutput::Initialize()
 	InitializeSubsystems();
 
 	for (vector<PreInitLogEntry>::iterator it = preInitLog().begin(); it != preInitLog().end(); ++it)
-		Output(*it->subsystem, it->text.c_str());
+	{
+		if (!it->subsystem->enabled) return;
+
+		// Output to subscribers
+		for(vector<ILogSubscriber*>::iterator lsi = subscribers.begin(); lsi != subscribers.end(); ++lsi)
+			(*lsi)->NotifyLogMsg(*(it->subsystem), it->text.c_str());
+		if (filelog)
+			ToFile(*it->subsystem, it->text);
+	}
 	preInitLog().clear();
 }
 
@@ -231,12 +206,12 @@ void CLogOutput::InitializeSubsystems()
 			if (sys->name && *sys->name) {
 				const string name = StringToLower(sys->name);
 				const string::size_type index = subsystems.find("," + name + ",");
-
+	
 				// log subsystems which are enabled by default can not be disabled
 				// ("enabled by default" wouldn't make sense otherwise...)
 				if (!sys->enabled && index != string::npos)
 					sys->enabled = true;
-
+	
 				if (sys->enabled) {
 					lo << sys->name;
 					if (sys->next)
@@ -261,11 +236,12 @@ void CLogOutput::InitializeSubsystems()
  * This method notifies all registered ILogSubscribers, calls OutputDebugString
  * (for MSVC builds) and prints the message to stdout and the file log.
  */
-void CLogOutput::Output(const CLogSubsystem& subsystem, const char* str)
+void CLogOutput::Output(const CLogSubsystem& subsystem, const std::string& str)
 {
 	GML_STDMUTEX_LOCK(log); // Output
 
 	if (!initialized) {
+		ToStdout(subsystem, str);
 		preInitLog().push_back(PreInitLogEntry(&subsystem, str));
 		return;
 	}
@@ -274,39 +250,22 @@ void CLogOutput::Output(const CLogSubsystem& subsystem, const char* str)
 
 	// Output to subscribers
 	for(vector<ILogSubscriber*>::iterator lsi = subscribers.begin(); lsi != subscribers.end(); ++lsi)
-		(*lsi)->NotifyLogMsg(subsystem, str);
-
-	int index = strlen(str) - 1;
-	bool newline = ((index < 0) || (str[index] != '\n'));
+		(*lsi)->NotifyLogMsg(subsystem, str.c_str());
 
 #ifdef _MSC_VER
-	OutputDebugString(str);
+	int index = strlen(str.c_str()) - 1;
+	bool newline = ((index < 0) || (str[index] != '\n'));
+	OutputDebugString(str.c_str());
 	if (newline)
 		OutputDebugString("\n");
 #endif // _MSC_VER
 
+	
 	if (filelog) {
-#if !defined UNITSYNC && !defined DEDICATED
-		if (gs) {
-			(*filelog) << IntToString(gs->frameNum, "[%7d] ");
-		}
-#endif
-		if (subsystem.name && *subsystem.name)
-			(*filelog) << subsystem.name << ": ";
-		(*filelog) << str;
-		if (newline)
-			(*filelog) << "\n";
-		filelog->flush();
+		ToFile(subsystem, str);
 	}
 
-	if (subsystem.name && *subsystem.name) {
-		fputs(subsystem.name, stdout);
-		fputs(": ", stdout);
-	}
-	fputs(str, stdout);
-	if (newline)
-		putchar('\n');
-	fflush(stdout);
+	ToStdout(subsystem, str);
 }
 
 
@@ -369,7 +328,7 @@ void CLogOutput::Printv(CLogSubsystem& subsystem, const char* fmt, va_list argp)
 	char text[BUFFER_SIZE];
 
 	VSNPRINTF(text, sizeof(text), fmt, argp);
-	Output(subsystem, text);
+	Output(subsystem, std::string(text));
 }
 
 
@@ -385,13 +344,13 @@ void CLogOutput::Print(const char* fmt, ...)
 
 void CLogOutput::Print(const std::string& text)
 {
-	Output(LOG_DEFAULT, text.c_str());
+	Output(LOG_DEFAULT, text);
 }
 
 
 void CLogOutput::Prints(const CLogSubsystem& subsystem, const std::string& text)
 {
-	Output(subsystem, text.c_str());
+	Output(subsystem, text);
 }
 
 
@@ -400,3 +359,38 @@ CLogSubsystem& CLogOutput::GetDefaultLogSubsystem()
 	return LOG_DEFAULT;
 }
 
+void CLogOutput::ToStdout(const CLogSubsystem& subsystem, const std::string message)
+{
+	if (message.empty())
+		return;
+	const bool newline = (message.at(message.size() -1) != '\n');
+	
+	if (subsystem.name && *subsystem.name) {
+		std::cout << subsystem.name << ": ";
+	}
+	std::cout << message;
+	if (newline)
+		std::cout << std::endl;
+	else
+		std::cout.flush();
+}
+
+void CLogOutput::ToFile(const CLogSubsystem& subsystem, const std::string message)
+{
+	if (message.empty())
+		return;
+	const bool newline = (message.at(message.size() -1) != '\n');
+	
+#if !defined UNITSYNC && !defined DEDICATED
+	if (gs) {
+		(*filelog) << IntToString(gs->frameNum, "[%7d] ");
+	}
+#endif
+	if (subsystem.name && *subsystem.name)
+		(*filelog) << subsystem.name << ": ";
+	(*filelog) << message;
+	if (newline)
+		(*filelog) << std::endl;
+	else
+		filelog->flush();
+}

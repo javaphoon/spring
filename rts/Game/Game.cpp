@@ -129,6 +129,7 @@
 #include "Sound/Music.h"
 #include "FileSystem/SimpleParser.h"
 #include "Net/RawPacket.h"
+#include "Net/PackPacket.h"
 #include "Net/UnpackPacket.h"
 #include "UI/CommandColors.h"
 #include "UI/CursorIcons.h"
@@ -277,8 +278,6 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 	game = this;
 	boost::thread thread(boost::bind<void, CNetProtocol, CNetProtocol*>(&CNetProtocol::UpdateLoop, net));
 
-	CPlayer::UpdateControlledTeams();
-
 	memset(gameID, 0, sizeof(gameID));
 
 	infoConsole = new CInfoConsole();
@@ -326,7 +325,7 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 	oldHeading = 0;
 	oldStatus  = 255;
 
-	sound = new CSound();
+	sound->LoadSoundDefs("gamedata/sounds.lua");
 	chatSound = sound->GetSoundId("IncomingChat", false);
 
 	moveWarnings = !!configHandler->Get("MoveWarnings", 1);
@@ -430,7 +429,7 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 	uh = new CUnitHandler();
 	unitDrawer = new CUnitDrawer();
 	fartextureHandler = new CFartextureHandler();
-	modelParser = new C3DModelParser();
+	modelParser = new C3DModelLoader();
 
 	featureHandler->LoadFeaturesFromMap(saveFile || CScriptHandler::Instance().chosenScript->loadGame);
 	pathManager = new CPathManager();
@@ -457,7 +456,6 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 	CCobInstance::InitVars(teamHandler->ActiveTeams(), teamHandler->ActiveAllyTeams());
 	CEngineOutHandler::Initialize();
 
-	CPlayer* p = playerHandler->Player(gu->myPlayerNum);
 	GameSetupDrawer::Enable();
 
 	PrintLoadMsg("Loading LuaRules");
@@ -493,7 +491,7 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 
 	glFogfv(GL_FOG_COLOR, mapInfo->atmosphere.fogColor);
 	glFogf(GL_FOG_START, 0.0f);
-	glFogf(GL_FOG_END, gu->viewRange * 0.98f);
+	glFogf(GL_FOG_START,gu->viewRange*mapInfo->atmosphere.fogStart);
 	glFogf(GL_FOG_DENSITY, 1.0f);
 	glFogi(GL_FOG_MODE,GL_LINEAR);
 	glEnable(GL_FOG);
@@ -524,6 +522,7 @@ CGame::CGame(std::string mapname, std::string modName, CLoadSaveHandler *saveFil
 #endif
 	logOutput.Print("Build date/time: %s", SpringVersion::BuildTime);
 	//sending your playername to the server indicates that you are finished loading
+	CPlayer* p = playerHandler->Player(gu->myPlayerNum);
 	net->Send(CBaseNetProtocol::Get().SendPlayerName(gu->myPlayerNum, p->name));
 
 	lastCpuUsageTime = gu->gameTime + 10;
@@ -995,7 +994,7 @@ bool CGame::ActionPressed(const Action& action,
 	else if (cmd == "echo") {
 		logOutput.Print(action.extra);
 	}
-	else if (cmd == "set" || cmd == "sets" || cmd == "seti" || cmd == "setf") { // the set[s|i|f] should be removed sometimes
+	else if (cmd == "set") {
 		const std::string::size_type pos = action.extra.find_first_of(" ");
 		if (pos != std::string::npos) {
 			const std::string varName = action.extra.substr(0, pos);
@@ -1015,6 +1014,7 @@ bool CGame::ActionPressed(const Action& action,
 			}
 		}
 	}
+
 	else if (!isRepeat && cmd == "mouse1") {
 		mouse->MousePress (mouse->lastx, mouse->lasty, 1);
 	}
@@ -1046,6 +1046,7 @@ bool CGame::ActionPressed(const Action& action,
 			camHandler->CameraTransition(0.6f);
 		}
 	}
+
 	else if (cmd == "moveforward") {
 		camMove[0]=true;
 	}
@@ -1070,6 +1071,7 @@ bool CGame::ActionPressed(const Action& action,
 	else if (cmd == "moveslow") {
 		camMove[7]=true;
 	}
+
 	else if (cmd == "team"){
 		if (gs->cheatEnabled)
 		{
@@ -1122,6 +1124,7 @@ bool CGame::ActionPressed(const Action& action,
 			}
 		}
 	}
+
 	else if (cmd == "group") {
 		const char* c = action.extra.c_str();
 		const int t = c[0];
@@ -1161,6 +1164,7 @@ bool CGame::ActionPressed(const Action& action,
 	else if (cmd == "group9") {
 		grouphandlers[gu->myTeam]->GroupCommand(9);
 	}
+
 	else if (cmd == "lastmsgpos") {
 		// cycle through the positions
 		camHandler->GetCurrentController().SetPos(infoConsole->GetMsgPos());
@@ -1499,15 +1503,6 @@ bool CGame::ActionPressed(const Action& action,
 	else if (cmd == "showpathmap") {
 		gd->SetPathMapTexture();
 	}
-	else if (cmd == "yardmap4") {
-		//		groundDrawer->SetExtraTexture(readmap->yardmapLevels[3],readmap->yardmapPal,true);
-	}
-	/*	if (cmd == "showsupply"){
-		groundDrawer->SetExtraTexture(supplyhandler->supplyLevel[gu->myTeam],supplyhandler->supplyPal);
-		}*/
-	/*	if (cmd == "showteam"){
-		groundDrawer->SetExtraTexture(readmap->teammap,cityhandler->teampal);
-		}*/
 	else if (cmd == "togglelos") {
 		gd->ToggleLosTexture();
 	}
@@ -1626,11 +1621,6 @@ bool CGame::ActionPressed(const Action& action,
 		}
 		configHandler->Set("ShowPlayerInfo", (int)playerRoster.GetSortType());
 	}
-	else if (cmd == "techlevels") {
-		unitDefHandler->SaveTechLevels("", modInfo.filename); // stdout
-		unitDefHandler->SaveTechLevels("techlevels.txt", modInfo.filename);
-		logOutput.Print("saved techlevels.txt");
-	}
 	else if (cmd == "cmdcolors") {
 		const string name = action.extra.empty() ? "cmdcolors.txt" : action.extra;
 		cmdColors.LoadConfig(name);
@@ -1667,12 +1657,6 @@ bool CGame::ActionPressed(const Action& action,
 			logOutput.Print("Loaded font: %s\n", action.extra.c_str());
 			configHandler->SetString("FontFile", action.extra);
 			configHandler->SetString("SmallFontFile", action.extra);
-		}
-	}
-	else if (cmd == "aiselect") {
-		if (gs->noHelperAIs) {
-			logOutput.Print("GroupAI controll is not available anymore, and LuaUI control is disabled");
-			return true;
 		}
 	}
 	else if (cmd == "vsync") {
@@ -1740,6 +1724,7 @@ bool CGame::ActionPressed(const Action& action,
 		logOutput.Print(string("movewarnings ") +
 		                (moveWarnings ? "enabled" : "disabled"));
 	}
+
 	else if (cmd == "mapmarks") {
 		if (action.extra.empty()) {
 			drawMapMarks = !drawMapMarks;
@@ -1756,6 +1741,14 @@ bool CGame::ActionPressed(const Action& action,
 			}
 		}
 	}
+	else if (cmd == "noluadraw") {
+		if (action.extra.empty()) {
+			inMapDrawer->SetLuaMapDrawingAllowed(!inMapDrawer->GetLuaMapDrawingAllowed());
+		} else {
+			inMapDrawer->SetLuaMapDrawingAllowed(!!atoi(action.extra.c_str()));
+		}
+	}
+
 	else if (cmd == "luaui") {
 		if (guihandler != NULL) {
 
@@ -2101,6 +2094,11 @@ void CGame::ActionReceived(const Action& action, int playernum)
 			}
 		}
 		logOutput.Print("LuaUI control is %s", gs->noHelperAIs ? "disabled" : "enabled");
+	}
+	else if (action.command == "nospecdraw") {
+		bool buf;
+		SetBoolArg(buf, action.extra);
+		inMapDrawer->SetSpecMapDrawingAllowed(buf);
 	}
 	else if (action.command == "godmode") {
 		if (!gs->cheatEnabled)
@@ -2521,8 +2519,6 @@ bool CGame::Update()
 
 	if (!net->Active() && !gameOver) {
 		logOutput.Print("Lost connection to gameserver");
-		gameOver = true;
-		eventHandler.GameOver();
 		GameEnd();
 	}
 
@@ -2555,16 +2551,15 @@ bool CGame::DrawWorld()
 	}
 
 	if (drawGround) {
-		{
-		SCOPED_TIMER("ExtraTexture");
-		gd->UpdateExtraTexture();
-		}
 		gd->Draw();
 		treeDrawer->DrawGrass();
 	}
 
-	if (drawWater) {
-		if (!mapInfo->map.voidWater && water->drawSolid) {
+	if (drawWater && !mapInfo->map.voidWater) {
+		SCOPED_TIMER("Water");
+		water->OcclusionQuery();
+		if (water->drawSolid) {
+			water->UpdateWater(this);
 			water->Draw();
 		}
 	}
@@ -2572,19 +2567,19 @@ bool CGame::DrawWorld()
 	selectedUnits.Draw();
 	eventHandler.DrawWorldPreUnit();
 
+	unitDrawer->Draw(false);
+	featureHandler->Draw();
+
 	if (drawGround) {
 		gd->DrawTrees();
 	}
-
-	unitDrawer->Draw(false);
-	featureHandler->Draw();
 
 #if !defined(USE_GML) || !GML_ENABLE_SIM // Pathmanager is not thread safe
 	if (gu->drawdebug && gs->cheatEnabled) {
 		pathManager->Draw();
 	}
 #endif
-	//transparent stuff
+	//! transparent stuff
 	glEnable(GL_BLEND);
 	glDepthFunc(GL_LEQUAL);
 
@@ -2596,13 +2591,16 @@ bool CGame::DrawWorld()
 		glDisable(GL_CLIP_PLANE3);
 	}
 
-	if (drawWater) {
-		if (!mapInfo->map.voidWater && !water->drawSolid) {
+	if (drawWater && !mapInfo->map.voidWater) {
+		SCOPED_TIMER("Water");
+		if (!water->drawSolid) {
+			water->UpdateWater(this);
 			water->Draw();
 		}
 	}
 
-	if(clip) // draw cloaked part above surface
+	//! draw cloaked part above surface
+	if(clip)
 		glEnable(GL_CLIP_PLANE3);
 	unitDrawer->DrawCloakedUnits(false);
 	featureHandler->DrawFadeFeatures(false);
@@ -2632,7 +2630,7 @@ bool CGame::DrawWorld()
 		inMapDrawer->Draw();
 	}
 
-	// underwater overlay
+	//! underwater overlay
 	if (camera->pos.y < 0.0f) {
 		const float3& cpos = camera->pos;
 		const float vr = gu->viewRange * 0.5f;
@@ -2706,17 +2704,6 @@ bool CGame::DrawMT() {
 bool CGame::Draw() {
 #endif
 
-	if(lastSimFrame!=gs->frameNum) {
-		CInputReceiver::CollectGarbage();
-		if(!skipping) {
-			water->Update();
-			sound->UpdateListener(camera->pos, camera->forward, camera->up, gu->lastFrameTime); //TODO call only when camera changed
-			ph->UpdateTextures();
-			sky->Update();
-		}
-		lastSimFrame=gs->frameNum;
-	}
-
 	//! timings and frame interpolation
 	thisFps++;
 	const unsigned currentTime = SDL_GetTicks();
@@ -2729,6 +2716,30 @@ bool CGame::Draw() {
 	} else  {
 		gu->timeOffset=0;
 		lastUpdate = SDL_GetTicks();
+	}
+
+	if(lastSimFrame!=gs->frameNum) {
+		CInputReceiver::CollectGarbage();
+		if(!skipping) {
+			sound->UpdateListener(camera->pos, camera->forward, camera->up, gu->lastFrameTime); //TODO call only when camera changed
+			ph->UpdateTextures();
+			water->Update();
+			sky->Update();
+		}
+		lastSimFrame=gs->frameNum;
+	}
+
+	const bool doDrawWorld = hideInterface || !minimap->GetMaximized() || minimap->GetMinimized();
+
+	//set camera
+	camHandler->UpdateCam();
+	camera->Update(false);
+
+	CBaseGroundDrawer* gd;
+	if (doDrawWorld) {
+		SCOPED_TIMER("GroundUpdate");
+		gd = readmap->GetGroundDrawer();
+		gd->Update(); // let it update before shadows have to be drawn
 	}
 
 	if(!skipping)
@@ -2757,10 +2768,11 @@ bool CGame::Draw() {
 	modelParser->Update();
 	treeDrawer->UpdateDraw();
 	readmap->UpdateDraw();
-	fartextureHandler->CreateFarTextures();
-	mouse->EmptyMsgQueUpdate();
 	unitDrawer->Update();
+	mouse->UpdateCursors();
+	mouse->EmptyMsgQueUpdate();
 	lineDrawer.UpdateLineStipple();
+	fartextureHandler->CreateFarTextures();
 
 	LuaUnsyncedCtrl::ClearUnitCommandQueues();
 	eventHandler.Update();
@@ -2772,14 +2784,6 @@ bool CGame::Draw() {
 		return true;
 	}
 
-	glDisable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glDisable(GL_TEXTURE_2D);
-
-	//set camera
-	camHandler->UpdateCam();
-	mouse->UpdateCursors();
-
 	if (unitTracker.Enabled()) {
 		unitTracker.SetCam();
 	}
@@ -2788,16 +2792,12 @@ bool CGame::Draw() {
 		script->SetCamera();
 	}
 
-	CBaseGroundDrawer* gd;
-	{
-		SCOPED_TIMER("Ground");
-		gd = readmap->GetGroundDrawer();
-		gd->Update(); // let it update before shadows have to be drawn
-	}
-
-	const bool doDrawWorld = hideInterface || !minimap->GetMaximized() || minimap->GetMinimized();
-
 	if (doDrawWorld) {
+		{
+			SCOPED_TIMER("ExtraTexture");
+			gd->UpdateExtraTexture();
+		}
+
 		SCOPED_TIMER("Shadows/Reflect");
 		if (shadowHandler->drawShadows &&
 		    (gd->drawMode != CBaseGroundDrawer::drawLos)) {
@@ -2809,18 +2809,16 @@ bool CGame::Draw() {
 		if (unitDrawer->advShading) {
 			unitDrawer->UpdateReflectTex();
 		}
+		if (FBO::IsSupported())
+			FBO::Unbind();
+		glViewport(gu->viewPosX,0,gu->viewSizeX,gu->viewSizeY);
 	}
 
-	camera->Update(false); //FIXME: after UpdateWater?
-
+	glDisable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glClearColor(mapInfo->atmosphere.fogColor[0], mapInfo->atmosphere.fogColor[1], mapInfo->atmosphere.fogColor[2], 0);
-
-	{
-		SCOPED_TIMER("Water");
-		water->UpdateWater(this);
-	}
-
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);	// Clear Screen And Depth&Stencil Buffer
+	camera->Update(false);
 
 	if (doDrawWorld) {
 		DrawWorld();
@@ -2843,7 +2841,9 @@ bool CGame::Draw() {
 
 	glDisable(GL_FOG);
 
-	eventHandler.DrawScreenEffects();
+	if (doDrawWorld) {
+		eventHandler.DrawScreenEffects();
+	}
 
 	if (mouse->locked && (crossSize > 0.0f)) {
 		glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
@@ -2888,11 +2888,11 @@ bool CGame::Draw() {
 		//print some infos (fps,gameframe,particles)
 		glColor4f(1,1,0.5f,0.8f);
 		font->glFormat(0.03f, 0.02f, 1.0f, FONT_SCALE | FONT_NORM, "FPS: %d Frame: %d Particles: %d (%d)",
-		                 fps, gs->frameNum, ph->projectiles.size(), ph->currentParticles);
+		    fps, gs->frameNum, ph->syncedProjectiles.size() + ph->unsyncedProjectiles.size(), ph->currentParticles);
 
 		if (playing) {
 			font->glFormat(0.03f, 0.07f, 0.7f, FONT_SCALE | FONT_NORM, "xpos: %5.0f ypos: %5.0f zpos: %5.0f speed %2.2f",
-			                 camera->pos.x, camera->pos.y, camera->pos.z, gs->speedFactor);
+			    camera->pos.x, camera->pos.y, camera->pos.z, gs->speedFactor);
 		}
 	}
 
@@ -3175,7 +3175,6 @@ void CGame::SimFrame() {
 	{
 		SCOPED_TIMER("Collisions");
 		ph->CheckCollisions();
-		ground->CheckCol(ph);
 	}
 
 	ph->Update();
@@ -3262,8 +3261,6 @@ void CGame::ClientReadNet()
 				logOutput.Print("Server shutdown");
 				if (!gameOver)
 				{
-					gameOver=true;
-					eventHandler.GameOver();
 					GameEnd();
 				}
 				AddTraffic(-1, packetCode, dataLength);
@@ -3302,8 +3299,6 @@ void CGame::ClientReadNet()
 			}
 
 			case NETMSG_GAMEOVER: {
-				gameOver=true;
-				eventHandler.GameOver();
 				if (gu->autoQuit) {
 					logOutput.Print("Automatical quit enforced from commandline");
 					globalQuit = true;
@@ -3762,6 +3757,7 @@ void CGame::ClientReadNet()
 						} else {
 							playerHandler->Player(player)->StartSpectating();
 						}
+						selectedUnits.ClearNetSelect(player);
 						CPlayer::UpdateControlledTeams();
 						break;
 					}
@@ -3776,6 +3772,7 @@ void CGame::ClientReadNet()
 							teamHandler->Team(fromTeam)->leader = -1;
 						}
 						logOutput.Print("Player %i resigned and is now spectating!", player);
+						selectedUnits.ClearNetSelect(player);
 						CPlayer::UpdateControlledTeams();
 						break;
 					}
@@ -4085,7 +4082,7 @@ void CGame::UpdateUI(bool cam)
 				userInput = userInput.substr(0, 200);
 				writingPos = (int)userInput.length();
 			}
-			inMapDrawer->SendPoint(inMapDrawer->waitingPoint, userInput);
+			inMapDrawer->SendPoint(inMapDrawer->waitingPoint, userInput, false);
 			inMapDrawer->wantLabel = false;
 			userInput = "";
 			writingPos = 0;
@@ -4105,24 +4102,25 @@ void CGame::MakeMemDump(void)
 
 	file << "Frame " << gs->frameNum <<"\n";
 	for (std::list<CUnit*>::iterator usi = uh->activeUnits.begin(); usi != uh->activeUnits.end(); usi++) {
-		CUnit* u=*usi;
+		CUnit* u = *usi;
 		file << "Unit " << u->id << "\n";
 		file << "  xpos " << u->pos.x << " ypos " << u->pos.y << " zpos " << u->pos.z << "\n";
 		file << "  heading " << u->heading << " power " << u->power << " experience " << u->experience << "\n";
 		file << " health " << u->health << "\n";
 	}
-	for(ProjectileContainer::iterator psi=ph->projectiles.begin(); psi != ph->projectiles.end();++psi){
-		CProjectile* p=*psi;
+	//! we only care about the synced projectile data here
+	for (ProjectileContainer::iterator psi = ph->syncedProjectiles.begin(); psi != ph->syncedProjectiles.end(); ++psi) {
+		CProjectile* p = *psi;
 		file << "Projectile " << p->radius << "\n";
 		file << "  xpos " << p->pos.x << " ypos " << p->pos.y << " zpos " << p->pos.z << "\n";
 		file << "  xspeed " << p->speed.x << " yspeed " << p->speed.y << " zspeed " << p->speed.z << "\n";
 	}
 	for(int a=0;a<teamHandler->ActiveTeams();++a){
-		file << "Losmap for team " << a << "\n";
-		for(int y=0;y<gs->mapy>>modInfo.losMipLevel;++y){
+		file << "LOS-map for team " << a << "\n";
+		for (int y = 0; y < gs->mapy>>modInfo.losMipLevel; ++y) {
 			file << " ";
-			for(int x=0;x<gs->mapx>>modInfo.losMipLevel;++x){
-				file << loshandler->losMap[a][y*(gs->mapx>>modInfo.losMipLevel)+x] << " ";
+			for (int x = 0; x < gs->mapx>>modInfo.losMipLevel; ++x) {
+				file << loshandler->losMap[a][y * (gs->mapx>>modInfo.losMipLevel) + x] << " ";
 			}
 			file << "\n";
 		}
@@ -4346,11 +4344,13 @@ void CGame::DrawDirectControlHud(void)
 
 void CGame::GameEnd()
 {
+	gameOver=true;
+	eventHandler.GameOver();
 	new CEndGameBox();
 	CDemoRecorder* record = net->GetDemoRecorder();
 	if (record != NULL) {
 		// Write CPlayer::Statistics and CTeam::Statistics to demo
-		const int numPlayers = gameSetup->numPlayers;
+		const int numPlayers = playerHandler->ActivePlayers();
 
 		// TODO: move this to a method in CTeamHandler
 		// Figure out who won the game.
@@ -4373,6 +4373,9 @@ void CGame::GameEnd()
 		}
 		for (int i = 0; i < numTeams; ++i) {
 			record->SetTeamStats(i, teamHandler->Team(i)->statHistory);
+			netcode::PackPacket* buf = new netcode::PackPacket(2 + sizeof(CTeam::Statistics), NETMSG_TEAMSTAT);
+			*buf << (uint8_t)teamHandler->Team(i)->teamNum << teamHandler->Team(i)->currentStats;
+			net->Send(buf);
 		}
 	}
 }

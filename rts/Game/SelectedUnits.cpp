@@ -466,6 +466,10 @@ void CSelectedUnits::NetOrder(Command &c, int playerID)
 	}
 }
 
+void CSelectedUnits::ClearNetSelect(int player)
+{
+	netSelected[player].clear();
+}
 
 void CSelectedUnits::AiOrder(int unitid, const Command &c, int playerID)
 {
@@ -667,10 +671,20 @@ std::string CSelectedUnits::GetTooltip(void)
 	if (!selectedUnits.empty()) {
 		// show the player name instead of unit name if it has FBI tag showPlayerName
 		if ((*selectedUnits.begin())->unitDef->showPlayerName) {
-			if (teamHandler->Team((*selectedUnits.begin())->team)->leader >= 0)
-				s = playerHandler->Player(teamHandler->Team((*selectedUnits.begin())->team)->leader)->name.c_str();
-			else
+			const int teamIdx = (*selectedUnits.begin())->team;
+			const CTeam* team = teamHandler->Team(teamIdx);
+
+			if (team->leader >= 0) {
+				s = playerHandler->Player(team->leader)->name;
+
+				if (team->isAI) {
+					s += " (AI: " +
+						(team->skirmishAIKey.GetShortName() + " " +
+						 team->skirmishAIKey.GetVersion()) + ")";
+				}
+			} else {
 				s = "Uncontrolled";
+			}
 		} else {
 			s = (*selectedUnits.begin())->tooltip;
 		}

@@ -506,7 +506,7 @@ for baseName in aiinterfaces_toBuild:
 		springSrcDir = filelist.getAbsDir(env, '..')
 		springInterfaceSrcDir = os.path.join(springSrcDir, 'rts', 'ExternalAI', 'Interface')
 		interfaceJLibDir = os.path.join(myEnv['sourcedir'], 'data', 'jlib')
-		interfaceJavaSrcDir = os.path.join(myEnv['sourcedir'], 'java', 'src')
+		interfaceJavaSrcDir = os.path.join(myEnv['sourcedir'], 'src', 'java')
 		interfaceManifestFile = filelist.getAbsDir(env, os.path.join(interfaceJavaSrcDir, 'manifest.mf'))
 		interfaceBinDir = os.path.join('AI', myEnv['sourcedir'], 'bin')
 		awkScriptsDir = interfaceBinDir
@@ -643,8 +643,8 @@ skirmishaiobjs_CUtils = create_shared_objects(skirmishai_env, filelist.get_share
 
 # Build
 skirmishai_exclude_list=['build', 'CSAI', 'TestABICAI', 'AbicWrappersTestAI']
-skirmishai_isLegacyCpp_list=['AAI', 'KAIK', 'RAI', 'NullLegacyCppAI', 'KAI', 'NTai']
-skirmishai_needCUtils_list=['AAI', 'KAIK', 'RAI', 'NullLegacyCppAI', 'KAI', 'NTai']
+skirmishai_isLegacyCpp_list=['AAI', 'KAIK', 'RAI', 'NullLegacyCppAI', 'KAI', 'NTai', 'E323AI']
+skirmishai_needCUtils_list=['AAI', 'KAIK', 'RAI', 'NullLegacyCppAI', 'KAI', 'NTai', 'E323AI']
 skirmishai_needCreg_list=['KAIK', 'KAI']
 skirmishai_needBoost_list=['NTai']
 skirmishai_isJava_list=['NullJavaAI', 'NullOOJavaAI']

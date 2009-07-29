@@ -39,15 +39,11 @@ public:
 		StartPos_Last = 3  // last entry in enum (for user input check)
 	};
 
-	/// the expected amount of players
-	int numPlayers;
-	int numTeams;
-	int numAllyTeams;
 	bool fixedAllies;
 	unsigned int mapHash;
 	unsigned int modHash;
 	std::string mapName;
-	std::string baseMod;
+	std::string modName;
 	std::string scriptName;
 	bool useLuaGaia;
 	std::string luaGaiaStr;

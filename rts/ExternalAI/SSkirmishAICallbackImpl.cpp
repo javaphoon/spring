@@ -1529,15 +1529,18 @@ EXPORT(int) skirmishAiCallback_0MULTI1VALS0UnitDef(int teamId, int unitDefIds[],
 		int unitDefIds_max) {
 
 	IAICallback* clb = team_callback[teamId];
-	int size = clb->GetNumUnitDefs();
+
+	const int size = min(clb->GetNumUnitDefs(), unitDefIds_max);
 	const UnitDef** defList = (const UnitDef**) new UnitDef*[size];
+
 	clb->GetUnitDefList(defList);
 
-	size = min(size, unitDefIds_max);
 	int i;
-	for (i=0; i < size; ++i) {
-		unitDefIds[i] = defList[i]->id;
+	for (i = 0; i < size; ++i) {
+		// AI's should double-check for this
+		unitDefIds[i] = (defList[i] != NULL)? defList[i]->id: -1;
 	}
+
 	delete [] defList;
 	defList = NULL;
 
@@ -1902,7 +1905,6 @@ EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToAttack(int teamId, int unitDefId
 EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToPatrol(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canPatrol;}
 EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToFight(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canFight;}
 EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToGuard(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canGuard;}
-EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToBuild(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canBuild;}
 EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToAssist(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canAssist;}
 EXPORT(bool) skirmishAiCallback_UnitDef_isAssistable(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canBeAssisted;}
 EXPORT(bool) skirmishAiCallback_UnitDef_isAbleToRepeat(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->canRepeat;}
@@ -2099,21 +2101,33 @@ EXPORT(void) skirmishAiCallback_UnitDef_0MAP1VALS0getCustomParams(int teamId, in
 		const char* values[]) {
 	copyStringArr(values, tmpValuesArr[teamId], tmpSize[teamId]);
 }
-EXPORT(bool) skirmishAiCallback_UnitDef_0AVAILABLE0MoveData(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata != NULL;}
-EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getMoveType(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->moveType;}
-EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getMoveFamily(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->moveFamily;}
-EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getSize(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->size;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getDepth(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->depth;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxSlope(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->maxSlope;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getSlopeMod(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->slopeMod;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getDepthMod(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->depthMod;}
-EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getPathType(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->pathType;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getCrushStrength(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->crushStrength;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxSpeed(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->maxSpeed;}
-EXPORT(short) skirmishAiCallback_UnitDef_MoveData_getMaxTurnRate(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->maxTurnRate;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxAcceleration(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->maxAcceleration;}
-EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxBreaking(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->maxBreaking;}
-EXPORT(bool) skirmishAiCallback_UnitDef_MoveData_isSubMarine(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->movedata->subMarine;}
+
+
+
+EXPORT(bool) skirmishAiCallback_UnitDef_0AVAILABLE0MoveData(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata != NULL; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxAcceleration(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->maxAcceleration; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxBreaking(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->maxBreaking; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxSpeed(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->maxSpeed; }
+EXPORT(short) skirmishAiCallback_UnitDef_MoveData_getMaxTurnRate(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->maxTurnRate; }
+
+EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getSize(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->size; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getDepth(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->depth; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getMaxSlope(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->maxSlope; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getSlopeMod(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->slopeMod; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getDepthMod(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->depthMod; }
+EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getPathType(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->pathType; }
+EXPORT(float) skirmishAiCallback_UnitDef_MoveData_getCrushStrength(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->crushStrength; }
+
+EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getMoveType(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->moveType; }
+EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getMoveFamily(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->moveFamily; }
+EXPORT(int) skirmishAiCallback_UnitDef_MoveData_getTerrainClass(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->terrainClass; }
+
+EXPORT(bool) skirmishAiCallback_UnitDef_MoveData_getFollowGround(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->followGround; }
+EXPORT(bool) skirmishAiCallback_UnitDef_MoveData_isSubMarine(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->subMarine; }
+EXPORT(const char*) skirmishAiCallback_UnitDef_MoveData_getName(int teamId, int unitDefId) { return getUnitDefById(teamId, unitDefId)->movedata->name.c_str(); }
+
+
+
 EXPORT(int) skirmishAiCallback_UnitDef_0MULTI1SIZE0WeaponMount(int teamId, int unitDefId) {return getUnitDefById(teamId, unitDefId)->weapons.size();}
 EXPORT(const char*) skirmishAiCallback_UnitDef_WeaponMount_getName(int teamId, int unitDefId, int weaponMountId) {
 	return getUnitDefById(teamId, unitDefId)->weapons.at(weaponMountId).name.c_str();
@@ -2323,7 +2337,7 @@ EXPORT(float) skirmishAiCallback_Unit_getMaxHealth(int teamId, int unitId) {
 /**
  * Returns a units command queue.
  * The return value may be <code>NULL</code> in some cases,
- * eg when cheats are disabled and we try to fetch from an enemy unit.
+ * eg. when cheats are disabled and we try to fetch from an enemy unit.
  * For internal use only.
  */
 static inline const CCommandQueue* _intern_Unit_getCurrentCommandQueue(int teamId, int unitId) {
@@ -2338,21 +2352,13 @@ static inline const CCommandQueue* _intern_Unit_getCurrentCommandQueue(int teamI
 	return q;
 }
 /**
- * Returns a untis command at a specific position in its command queue.
- * The return value may be <code>NULL</code> in some cases,
- * eg when cheats are disabled and we try to fetch from an enemy unit.
+ * Checks if a given commandId is valid for a commandQueue.
  * For internal use only.
  */
-static inline const Command* _intern_Unit_getCurrentCommandAt(int teamId, int unitId, int commandId) {
-	const Command* c = NULL;
-
-	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
-	if (q != NULL && commandId > 0 && static_cast<unsigned int>(commandId) < q->size()) {
-		c = &(q->at(commandId));
-	}
-
-	return c;
-}
+#define CHECK_COMMAND_ID(commandQueue, commandId) \
+		(commandQueue != NULL && \
+			commandId >= 0 && \
+			static_cast<unsigned int>(commandId) < commandQueue->size())
 
 EXPORT(int) skirmishAiCallback_Unit_0MULTI1SIZE1Command0CurrentCommand(int teamId, int unitId) {
 	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
@@ -2365,53 +2371,57 @@ EXPORT(int) skirmishAiCallback_Unit_CurrentCommand_0STATIC0getType(int teamId, i
 }
 
 EXPORT(int) skirmishAiCallback_Unit_CurrentCommand_getId(int teamId, int unitId, int commandId) {
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
-	return (c? c->id: 0);
+
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
+	return (CHECK_COMMAND_ID(q, commandId) ? q->at(commandId).id : 0);
 }
 
 EXPORT(unsigned char) skirmishAiCallback_Unit_CurrentCommand_getOptions(int teamId, int unitId, int commandId) {
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
-	return (c? c->options: 0);
+
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
+	return (CHECK_COMMAND_ID(q, commandId) ? q->at(commandId).options : 0);
 }
 
 EXPORT(unsigned int) skirmishAiCallback_Unit_CurrentCommand_getTag(int teamId, int unitId, int commandId) {
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
-	return (c? c->tag: 0);
+
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
+	return (CHECK_COMMAND_ID(q, commandId) ? q->at(commandId).tag : 0);
 }
 
 EXPORT(int) skirmishAiCallback_Unit_CurrentCommand_getTimeOut(int teamId, int unitId, int commandId) {
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
-	return (c? c->timeOut: 0);
+
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
+	return (CHECK_COMMAND_ID(q, commandId) ? q->at(commandId).timeOut : 0);
 }
 
 EXPORT(int) skirmishAiCallback_Unit_CurrentCommand_0ARRAY1SIZE0getParams(int teamId, int unitId, int commandId) {
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
-	return (c? c->params.size(): 0);
+
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
+	return (CHECK_COMMAND_ID(q, commandId) ? q->at(commandId).params.size() : 0);
 }
 
 EXPORT(int) skirmishAiCallback_Unit_CurrentCommand_0ARRAY1VALS0getParams(int teamId,
 		int unitId, int commandId, float* params, int params_sizeMax) {
 
-	const Command* c = _intern_Unit_getCurrentCommandAt(teamId, unitId, commandId);
+	const CCommandQueue* q = _intern_Unit_getCurrentCommandQueue(teamId, unitId);
 
-	if (c == NULL) {
+	if (!CHECK_COMMAND_ID(q, commandId)) {
 		return -1;
 	}
 
-	const std::vector<float>& ps = c->params;
-	int params_size = ps.size();
-	if (params_sizeMax < params_size ) {
-		params_size = params_sizeMax;
+	const std::vector<float>& ps = q->at(commandId).params;
+	size_t params_size = (params_sizeMax > 0) ? params_sizeMax : 0;
+	if (ps.size() < params_size) {
+		params_size = ps.size();
 	}
 
-	int p;
-	for (p=0; p < params_size; p++) {
+	for (size_t p=0; p < params_size; p++) {
 		params[p] = ps.at(p);
 	}
 
 	return params_size;
 }
-
+#undef CHECK_COMMAND_ID
 
 
 
@@ -3178,7 +3188,7 @@ EXPORT(bool) skirmishAiCallback_Group_isSelected(int teamId, int groupId) {
 
 
 static void skirmishAiCallback_init(SSkirmishAICallback* callback) {
-
+	//! register function pointers to the accessors
 	callback->Clb_Engine_handleCommand = &skirmishAiCallback_Engine_handleCommand;
 	callback->Clb_Engine_Version_getMajor = &skirmishAiCallback_Engine_Version_getMajor;
 	callback->Clb_Engine_Version_getMinor = &skirmishAiCallback_Engine_Version_getMinor;
@@ -3351,7 +3361,6 @@ static void skirmishAiCallback_init(SSkirmishAICallback* callback) {
 	callback->Clb_UnitDef_isAbleToPatrol = &skirmishAiCallback_UnitDef_isAbleToPatrol;
 	callback->Clb_UnitDef_isAbleToFight = &skirmishAiCallback_UnitDef_isAbleToFight;
 	callback->Clb_UnitDef_isAbleToGuard = &skirmishAiCallback_UnitDef_isAbleToGuard;
-	callback->Clb_UnitDef_isAbleToBuild = &skirmishAiCallback_UnitDef_isAbleToBuild;
 	callback->Clb_UnitDef_isAbleToAssist = &skirmishAiCallback_UnitDef_isAbleToAssist;
 	callback->Clb_UnitDef_isAssistable = &skirmishAiCallback_UnitDef_isAssistable;
 	callback->Clb_UnitDef_isAbleToRepeat = &skirmishAiCallback_UnitDef_isAbleToRepeat;
@@ -3451,9 +3460,15 @@ static void skirmishAiCallback_init(SSkirmishAICallback* callback) {
 	callback->Clb_UnitDef_0MAP1SIZE0getCustomParams = &skirmishAiCallback_UnitDef_0MAP1SIZE0getCustomParams;
 	callback->Clb_UnitDef_0MAP1KEYS0getCustomParams = &skirmishAiCallback_UnitDef_0MAP1KEYS0getCustomParams;
 	callback->Clb_UnitDef_0MAP1VALS0getCustomParams = &skirmishAiCallback_UnitDef_0MAP1VALS0getCustomParams;
+
+
+
 	callback->Clb_UnitDef_0AVAILABLE0MoveData = &skirmishAiCallback_UnitDef_0AVAILABLE0MoveData;
-	callback->Clb_UnitDef_MoveData_getMoveType = &skirmishAiCallback_UnitDef_MoveData_getMoveType;
-	callback->Clb_UnitDef_MoveData_getMoveFamily = &skirmishAiCallback_UnitDef_MoveData_getMoveFamily;
+	callback->Clb_UnitDef_MoveData_getMaxAcceleration = &skirmishAiCallback_UnitDef_MoveData_getMaxAcceleration;
+	callback->Clb_UnitDef_MoveData_getMaxBreaking = &skirmishAiCallback_UnitDef_MoveData_getMaxBreaking;
+	callback->Clb_UnitDef_MoveData_getMaxSpeed = &skirmishAiCallback_UnitDef_MoveData_getMaxSpeed;
+	callback->Clb_UnitDef_MoveData_getMaxTurnRate = &skirmishAiCallback_UnitDef_MoveData_getMaxTurnRate;
+
 	callback->Clb_UnitDef_MoveData_getSize = &skirmishAiCallback_UnitDef_MoveData_getSize;
 	callback->Clb_UnitDef_MoveData_getDepth = &skirmishAiCallback_UnitDef_MoveData_getDepth;
 	callback->Clb_UnitDef_MoveData_getMaxSlope = &skirmishAiCallback_UnitDef_MoveData_getMaxSlope;
@@ -3461,11 +3476,16 @@ static void skirmishAiCallback_init(SSkirmishAICallback* callback) {
 	callback->Clb_UnitDef_MoveData_getDepthMod = &skirmishAiCallback_UnitDef_MoveData_getDepthMod;
 	callback->Clb_UnitDef_MoveData_getPathType = &skirmishAiCallback_UnitDef_MoveData_getPathType;
 	callback->Clb_UnitDef_MoveData_getCrushStrength = &skirmishAiCallback_UnitDef_MoveData_getCrushStrength;
-	callback->Clb_UnitDef_MoveData_getMaxSpeed = &skirmishAiCallback_UnitDef_MoveData_getMaxSpeed;
-	callback->Clb_UnitDef_MoveData_getMaxTurnRate = &skirmishAiCallback_UnitDef_MoveData_getMaxTurnRate;
-	callback->Clb_UnitDef_MoveData_getMaxAcceleration = &skirmishAiCallback_UnitDef_MoveData_getMaxAcceleration;
-	callback->Clb_UnitDef_MoveData_getMaxBreaking = &skirmishAiCallback_UnitDef_MoveData_getMaxBreaking;
+	callback->Clb_UnitDef_MoveData_getMoveType = &skirmishAiCallback_UnitDef_MoveData_getMoveType;
+	callback->Clb_UnitDef_MoveData_getMoveFamily = &skirmishAiCallback_UnitDef_MoveData_getMoveFamily;
+	callback->Clb_UnitDef_MoveData_getTerrainClass = &skirmishAiCallback_UnitDef_MoveData_getTerrainClass;
+
+	callback->Clb_UnitDef_MoveData_getFollowGround = &skirmishAiCallback_UnitDef_MoveData_getFollowGround;
 	callback->Clb_UnitDef_MoveData_isSubMarine = &skirmishAiCallback_UnitDef_MoveData_isSubMarine;
+	callback->Clb_UnitDef_MoveData_getName = &skirmishAiCallback_UnitDef_MoveData_getName;
+
+
+
 	callback->Clb_UnitDef_0MULTI1SIZE0WeaponMount = &skirmishAiCallback_UnitDef_0MULTI1SIZE0WeaponMount;
 	callback->Clb_UnitDef_WeaponMount_getName = &skirmishAiCallback_UnitDef_WeaponMount_getName;
 	callback->Clb_UnitDef_WeaponMount_0SINGLE1FETCH2WeaponDef0getWeaponDef = &skirmishAiCallback_UnitDef_WeaponMount_0SINGLE1FETCH2WeaponDef0getWeaponDef;

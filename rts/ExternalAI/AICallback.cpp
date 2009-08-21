@@ -641,11 +641,18 @@ bool CAICallback::IsUnitNeutral(int unitId) {
 
 int CAICallback::InitPath(float3 start, float3 end, int pathType)
 {
-	return pathManager->RequestPath(moveinfo->moveData.at(pathType), start, end);
+	if (true)
+		logOutput.Print("AI: InitPath, pathType %i", pathType);
+	int pathId = pathManager->RequestPath(moveinfo->moveData.at(pathType), start, end);
+	if (true)
+		logOutput.Print("AI: InitPath, pathType %i", pathId);
+	return pathId;
 }
 
 float3 CAICallback::GetNextWaypoint(int pathId)
 {
+	if (true)
+		logOutput.Print("AI: GetNextWaypoint, pathId %i", pathId);
 	return pathManager->NextWaypoint(pathId, ZeroVector);
 }
 

@@ -118,7 +118,7 @@ const float MAX_OFF_PATH_FACTOR = 20;				// How far away from a waypoint a unit 
 
 const float MINIMUM_SPEED = 0.01f;					// Minimum speed a unit may move in.
 
-static const bool DEBUG_CONTROLLER=false;
+static const bool DEBUG_CONTROLLER=true;
 std::vector<int2> (*CGroundMoveType::lineTable)[11] = 0;
 
 //////////////////////////////////////////////////////////////////////
@@ -1185,6 +1185,8 @@ float CGroundMoveType::Distance2D(CSolidObject* object1, CSolidObject* object2, 
 // Creates a path to the goal.
 void CGroundMoveType::GetNewPath()
 {
+	if (DEBUG_CONTROLLER)
+		logOutput.Print("New Path requested for unit %i: %i", owner->id);
 	if (owner->pos.SqDistance2D(lastGetPathPos) < 400) {
 		if (DEBUG_CONTROLLER)
 			logOutput.Print("Non-moving path failures for unit %i: %i", owner->id, nonMovingFailures);
@@ -1201,8 +1203,14 @@ void CGroundMoveType::GetNewPath()
 		nonMovingFailures = 0;
 	}
 
+	if (DEBUG_CONTROLLER)
+		logOutput.Print("GMT: Deleting Path with ID: %i", pathId);
 	pathManager->DeletePath(pathId);
+	if (DEBUG_CONTROLLER)
+		logOutput.Print("GMT: Deleted Path with ID: %i", pathId);
 	pathId = pathManager->RequestPath(owner->mobility, owner->pos, goalPos, goalRadius, owner);
+	if (DEBUG_CONTROLLER)
+		logOutput.Print("GMT: New Path ID: %i", pathId);
 	nextWaypoint = owner->pos;
 
 	// if new path received, can't be at waypoint
@@ -1224,6 +1232,8 @@ Sets waypoint to next in path.
 
 void CGroundMoveType::GetNextWaypoint()
 {
+	if (DEBUG_CONTROLLER)
+		logOutput.Print("GMT: GetNextWaypoint for Path ID: %i", pathId);
 	if (pathId) {
 		waypoint = nextWaypoint;
 		nextWaypoint = pathManager->NextWaypoint(pathId, waypoint, 1.25f*SQUARE_SIZE);

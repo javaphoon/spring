@@ -48,6 +48,8 @@ Help-function.
 Turns a start->goal-request into a will defined request.
 */
 unsigned int CPathManager::RequestPath(const MoveData* moveData, float3 startPos, float3 goalPos, float goalRadius, CSolidObject* caller) {
+	if (true)
+		logOutput.Print("PM: RequestPath_1, %s", moveData->name);
 	startPos.CheckInBounds();
 	goalPos.CheckInBounds();
 
@@ -67,6 +69,8 @@ Request a new multipath, store the result and return an handle-id to it.
 */
 unsigned int CPathManager::RequestPath(const MoveData* moveData, float3 startPos, CPathFinderDef* peDef, float3 goalPos, CSolidObject* caller) {
 	SCOPED_TIMER("AI:PFS");
+	if (true)
+		logOutput.Print("PM: RequestPath_2, %s", moveData->name);
 
 	// Creates a new multipath.
 	MultiPath* newPath = new MultiPath(startPos, peDef, moveData);
@@ -264,6 +268,8 @@ Removes and return the next waypoint in the multipath corresponding to given id.
 float3 CPathManager::NextWaypoint(unsigned int pathId, float3 callerPos, float minDistance, int numRetries) const
 {
 	SCOPED_TIMER("AI:PFS");
+	if (true)
+		logOutput.Print("PM: NextWaypoint for Path ID %i, retries %i", pathId, numRetries);
 
 	//0 indicate a no-path id.
 	if(pathId == 0)
